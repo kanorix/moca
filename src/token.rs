@@ -1,58 +1,66 @@
 #[derive(Debug)]
 pub enum TokenKind {
-    Plus,      // +
-    Minus,     // -
-    Multi,     // *
-    Div,       // /
-    Not,       // !
-    Assign,    // =
-    Equal,     // ==
-    NotEqual,  // !=
-    And,       // &&
-    Or,        // ||
-    Dot,       // .
-    Lparen,    // (
-    Rparen,    // )
-    Lcurly,    // {
-    Rcurly,    // }
-    Lsquare,   // [
-    Rsquare,   // ]
-    Semicolon, // ;
-    //
-    If,        // if
-    Else,      // else
-    New,       // new
-    Class,
-    Ident,     // 変数名や関数名
-    Literal,   // リテラル
-    Other,
+    // operator (演算子)
+    Plus,     // +
+    Minus,    // -
+    Multi,    // *
+    Div,      // /
+    Not,      // !
+    Assign,   // =
+    Equal,    // ==
+    NotEqual, // !=
+    And,      // &&
+    Or,       // ||
+    Dot,      // .
+
+    // separator (区切り子)
+    Lparen,  // (
+    Rparen,  // )
+    Lcurly,  // {
+    Rcurly,  // }
+    Lsquare, // [
+    Rsquare, // ]
+    Colon,   // :
+    Scolon,  // ;
+
+    // keyword
+    Void,    // void
+    If,      // if
+    Else,    // else
+    For,     // for
+    New,     // new
+    Class,   // class
+    Int,     // int
+    Double,  // double
+    Boolean, // boolean
+
+    // others
+    Literal, // リテラル (整数・小数・文字列)
+    Ident,   // 変数名・関数名
+    Other,   // その他
 }
 
 #[derive(Debug)]
 pub enum Value {
     // Address(i64),
-    Int(i64),
+    Integer(i64),
     Double(f64),
     String(String),
     Boolean(bool),
-    Void,
-    None,
+    Symbol(String),
 }
-
-// const TOKEN_PAIR: &[(&str, TokenKind)] = &[("(", TokenKind::Lparen), (")", TokenKind::Rparen)];
 
 // #[derive(Debug)]
 pub struct Token {
     kind: TokenKind,
-    text: String,
     value: Value,
 }
 impl Token {
-    pub fn new(kind: TokenKind, text: String, value: Value) -> Self {
-        Token { kind, text, value }
+    pub fn new(kind: TokenKind, value: Value) -> Self {
+        Token { kind, value }
     }
 
     pub fn to_string(&self) -> String {
-        format!("Token({:?}, {:?}, {:?})", self.kind, self.text, self.value)
+        format!("Token( {:?}, {:?} )", self.kind, self.value)
     }
 }
