@@ -1,37 +1,47 @@
-use crate::token::{Token, TokenKind, Value};
+use crate::token::{Token, TokenKind};
 use std::{collections::VecDeque, str, vec};
 
-pub struct LexicalAnalizer {
+pub struct Lexer {
     chars: VecDeque<char>,
     current: Option<char>,
-    next: Option<char>,
 }
 
-impl LexicalAnalizer {
+impl Lexer {
     pub fn new(src: &str) -> Self {
         let mut chars: VecDeque<char> = src.chars().collect();
         let current = chars.pop_front();
-        let next = chars.pop_front();
-        LexicalAnalizer {
-            chars,
-            current,
-            next,
-        }
+        Lexer { chars, current }
     }
-    fn read(&mut self) {
-        self.current = self.next;
-        self.next = self.chars.pop_front();
-        // println!("read: [{:?}, {:?}]", self.current, self.next);
+
+    fn read_char(&mut self) {
+        self.current = self.chars.pop_front();
+    }
+
+    fn peek_char(&self) -> Option<char> {
+        self.chars.front().map(&char::to_owned)
     }
 
     fn skip_while(&mut self, test: impl Fn(char) -> bool) {
         while let Some(c) = self.current {
             if test(c) {
-                self.read()
+                self.read_char();
             } else {
                 break;
             }
         }
+    }
+
+    fn get_while(&mut self, test: impl Fn(char) -> bool) -> String {
+        let mut chars = Vec::new();
+        while let Some(c) = self.current {
+            if test(c) {
+                chars.push(c);
+                self.read_char()
+            } else {
+                break;
+            }
+        }
+        chars.iter().collect()
     }
 
     pub fn next_token(&mut self) -> Option<Token> {
@@ -49,15 +59,15 @@ impl LexicalAnalizer {
             } else if c == '"' {
                 Some(self.find_string())
             } else {
-                self.read();
-                Some(Token::new(TokenKind::Other, Value::Symbol(c.to_string())))
+                self.read_char();
+                Some(Token::new(TokenKind::Other, c.to_string()))
             }
         })
     }
 
     fn is_symbol(c: char) -> bool {
         vec![
-            '=', '+', '-', '*', '/', '!', '.', '&', '|', ';', '(', ')', '{', '}', '[', ']', ':',
+            '=', '+', '-', '*', '/', '!', '&', '|', ';', '(', ')', '{', '}', '[', ']', ':',
         ]
         .contains(&c)
     }
@@ -68,7 +78,7 @@ impl LexicalAnalizer {
 
     fn skip_comment(&mut self) {
         if Some('/') == self.current {
-            match self.next {
+            match self.peek_char() {
                 Some('/') => {
                     self.skip_while(|c| !Self::is_end(c));
                 }
@@ -83,44 +93,45 @@ impl LexicalAnalizer {
         let kind = match op {
             '+' => TokenKind::Plus,
             '-' => TokenKind::Minus,
-            '*' => TokenKind::Multi,
-            '/' => TokenKind::Div,
-            '.' => TokenKind::Dot,
+            '*' => TokenKind::Asterisk,
+            '/' => TokenKind::Slash,
             '(' => TokenKind::Lparen,
             ')' => TokenKind::Rparen,
             '{' => TokenKind::Lcurly,
             '}' => TokenKind::Rcurly,
             '[' => TokenKind::Lsquare,
             ']' => TokenKind::Rsquare,
-            ';' => TokenKind::Scolon,
+            ';' => TokenKind::SemiColon,
             ':' => TokenKind::Colon,
-            '=' => match self.next {
+            '>' => TokenKind::LessThan,
+            '<' => TokenKind::GreaterThan,
+            '=' => match self.peek_char() {
                 Some('=') => {
-                    self.read();
+                    self.read_char();
                     text.push('=');
                     TokenKind::Equal
                 }
                 _ => TokenKind::Assign,
             },
-            '!' => match self.next {
+            '!' => match self.peek_char() {
                 Some('=') => {
-                    self.read();
+                    self.read_char();
                     text.push('=');
                     TokenKind::NotEqual
                 }
-                _ => TokenKind::Not,
+                _ => TokenKind::Bang,
             },
-            '&' => match self.next {
+            '&' => match self.peek_char() {
                 Some('&') => {
-                    self.read();
+                    self.read_char();
                     text.push('&');
                     TokenKind::And
                 }
                 _ => TokenKind::Other,
             },
-            '|' => match self.next {
+            '|' => match self.peek_char() {
                 Some('|') => {
-                    self.read();
+                    self.read_char();
                     text.push('|');
                     TokenKind::Or
                 }
@@ -128,57 +139,39 @@ impl LexicalAnalizer {
             },
             _ => TokenKind::Other,
         };
-        self.read();
-        Token::new(kind, Value::Symbol(text))
+        self.read_char();
+        Token::new(kind, text)
     }
 
     fn find_word(&mut self) -> Token {
-        let mut stack = Vec::new();
-
-        while let Some(c) = self.current {
-            if c.is_whitespace() || Self::is_symbol(c) || Self::is_end(c) {
-                break;
-            } else {
-                stack.push(c);
-                self.read();
-            }
-        }
-
-        let text: String = stack.iter().collect();
-        match text.as_str() {
-            "if" => Token::new(TokenKind::If, Value::Symbol(text)),
-            "else" => Token::new(TokenKind::Else, Value::Symbol(text)),
-            "for" => Token::new(TokenKind::For, Value::Symbol(text)),
-            "new" => Token::new(TokenKind::New, Value::Symbol(text)),
-            "void" => Token::new(TokenKind::Void, Value::Symbol(text)),
-            "class" => Token::new(TokenKind::Class, Value::Symbol(text)),
-            "true" => Token::new(TokenKind::Literal, Value::Boolean(true)),
-            "false" => Token::new(TokenKind::Literal, Value::Boolean(false)),
-            "int" => Token::new(TokenKind::Int, Value::Symbol(text)),
-            "double" => Token::new(TokenKind::Double, Value::Symbol(text)),
-            "boolean" => Token::new(TokenKind::Boolean, Value::Symbol(text)),
-            _ => Token::new(TokenKind::Ident, Value::Symbol(text)),
+        let value: String =
+            self.get_while(|c| !(c.is_whitespace() || Self::is_symbol(c) || Self::is_end(c)));
+        match value.as_str() {
+            "void" => Token::new(TokenKind::Void, value),
+            "return" => Token::new(TokenKind::Return, value),
+            "if" => Token::new(TokenKind::If, value),
+            "else" => Token::new(TokenKind::Else, value),
+            "let" => Token::new(TokenKind::Let, value),
+            "while" => Token::new(TokenKind::While, value),
+            "true" => Token::new(TokenKind::BoolLiteral, value),
+            "false" => Token::new(TokenKind::BoolLiteral, value),
+            "int" => Token::new(TokenKind::Int, value),
+            "double" => Token::new(TokenKind::Double, value),
+            "boolean" => Token::new(TokenKind::Boolean, value),
+            _ => Token::new(TokenKind::Ident, value),
         }
     }
 
     fn find_string(&mut self) -> Token {
-        let mut stack = Vec::new();
-
         // 始まりの " を飛ばす
-        self.read();
-        while let Some(s) = self.current {
-            if s != '"' {
-                // 終わりの " がくるまでpushし続ける
-                stack.push(s);
-                self.read();
-            } else {
-                // 終わりの " を飛ばす
-                self.read();
-                break;
-            }
-        }
-        let value: String = stack.iter().collect();
-        Token::new(TokenKind::Literal, Value::String(value))
+        self.read_char();
+
+        let value: String = self.get_while(|c| c != '"');
+
+        // 終わりの " を飛ばす
+        self.read_char();
+
+        Token::new(TokenKind::StringLiteral, value)
     }
 
     fn find_numeric(&mut self) -> Token {
@@ -188,37 +181,37 @@ impl LexicalAnalizer {
         while let Some(s) = self.current {
             if s.is_numeric() {
                 stack.push(s);
-                self.read();
+                self.read_char();
             } else if s == '.' && !dot_flg {
                 dot_flg = true;
                 stack.push(s);
-                self.read();
+                self.read_char();
             } else {
                 break;
             }
         }
-        let numeric: String = stack.iter().collect();
 
-        let value = if dot_flg {
-            Value::Double(numeric.parse().unwrap())
+        let numeric: String = stack.iter().collect();
+        if dot_flg {
+            Token::new(TokenKind::DoubleLiteral, numeric)
         } else {
-            Value::Integer(numeric.parse().unwrap())
-        };
-        Token::new(TokenKind::Literal, value)
+            Token::new(TokenKind::IntLiteral, numeric)
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::LexicalAnalizer;
+    use super::Lexer;
 
     #[test]
     fn next_token() {
-        let src = "
+        let src = r#"
         int abc = 1234; //this is comment
         boolean b = true;
-        ";
-        let mut la = LexicalAnalizer::new(src);
+        String str = "sss;";
+        "#;
+        let mut la = Lexer::new(src);
         while let Some(token) = la.next_token() {
             println!("{}", token.to_string());
         }
