@@ -59,11 +59,7 @@ impl Parser {
         }
     }
 
-    fn skip_to(&mut self, token_kind: TokenKind) {
-        while !self.token.is_same_kind(token_kind) && self.next_token() {}
-    }
-
-    fn parse_program(&mut self) -> Program {
+    pub fn parse_program(&mut self) -> Program {
         let program = Program::new();
 
         while self.next_token() {
@@ -88,23 +84,33 @@ impl Parser {
         let ident = self.expect_next(TokenKind::Ident)?;
         self.expect_next(TokenKind::Assign)?;
 
-        self.skip_to(TokenKind::SemiColon);
+        self.next_token();
+        let value = self.parse_expression(Priority::Lowest as u8)?;
+
+        if self.peek_token_is(TokenKind::SemiColon) {
+            self.next_token();
+        }
 
         Result::Ok(Statement::LetStatement {
             token,
             identfier: Expression::Identifier(ident.value),
-            value: Expression::Null,
+            value,
         })
     }
 
     fn parse_return_statement(&mut self) -> Result<Statement, ParseError> {
         let token = self.token.clone(); // return のはず
 
-        self.skip_to(TokenKind::SemiColon);
+        self.next_token();
+        let return_value = self.parse_expression(Priority::Lowest as u8)?;
+
+        if self.peek_token_is(TokenKind::SemiColon) {
+            self.next_token();
+        }
 
         Result::Ok(Statement::ReturnStatement {
             token,
-            return_value: Expression::Null,
+            return_value,
         })
     }
 
@@ -117,7 +123,18 @@ impl Parser {
             self.next_token();
         }
 
-        Result::Ok(Statement::ExpressionStatement { token, expression })
+        Ok(Statement::ExpressionStatement { token, expression })
+    }
+
+    fn parse_block_statement(&mut self) -> Result<Statement, ParseError> {
+        let token = self.token.clone();
+        let mut statements: Vec<Statement> = Vec::new();
+        self.next_token();
+        while !self.token.is_same_kind(TokenKind::Rcurly) {
+            statements.push(self.parse_statement()?);
+            self.next_token();
+        }
+        Ok(Statement::BlockStatement { token, statements })
     }
 
     fn parse_expression(&mut self, priority: u8) -> Result<Expression, ParseError> {
@@ -125,12 +142,16 @@ impl Parser {
         let mut left = match self.token.token_kind {
             TokenKind::Ident => self.parse_identifier()?,
             TokenKind::IntLiteral => self.parse_integer_literal()?,
+            TokenKind::BoolLiteral => self.parse_boolean_literal()?,
             TokenKind::Bang | TokenKind::Minus => self.parse_prefix_expression()?,
+            TokenKind::Lparen => self.parse_grouped_expression()?,
+            TokenKind::If => self.parse_if_expression()?,
             _ => ParseError::throw("no prefix".to_string())?,
         };
 
         while !self.peek_token_is(TokenKind::SemiColon) && priority < self.peek_priority() as u8 {
             let peek = self.peek.clone().unwrap();
+            // infix
             let right = match peek.token_kind {
                 TokenKind::Plus
                 | TokenKind::Minus
@@ -145,7 +166,7 @@ impl Parser {
             self.next_token();
             left = right(self, left)?;
         }
-        return Result::Ok(left);
+        return Ok(left);
     }
 
     fn peek_priority(&self) -> Priority {
@@ -156,14 +177,23 @@ impl Parser {
     }
 
     fn parse_identifier(&self) -> Result<Expression, ParseError> {
-        Result::Ok(Expression::Identifier(self.token.clone().value))
+        Ok(Expression::Identifier(self.token.clone().value))
     }
 
     fn parse_integer_literal(&self) -> Result<Expression, ParseError> {
         match self.token.value.parse::<i32>() {
-            Ok(number) => Result::Ok(Expression::IntegerLiteral(number)),
+            Ok(number) => Ok(Expression::IntegerLiteral(number)),
             Err(_) => {
                 ParseError::throw(format!("could not parse {} as integer.", self.token.value))
+            }
+        }
+    }
+
+    fn parse_boolean_literal(&self) -> Result<Expression, ParseError> {
+        match self.token.value.parse::<bool>() {
+            Ok(boolean) => Ok(Expression::BooleanLiteral(boolean)),
+            Err(_) => {
+                ParseError::throw(format!("could not parse {} as boolean.", self.token.value))
             }
         }
     }
@@ -193,6 +223,45 @@ impl Parser {
             right: Box::new(self.parse_expression(priority)?),
         })
     }
+
+    fn parse_grouped_expression(&mut self) -> Result<Expression, ParseError> {
+        self.next_token();
+
+        let expression = self.parse_expression(Priority::Lowest as u8)?;
+        self.next_token();
+
+        if self.peek_token_is(TokenKind::Rparen) {
+            ParseError::throw("expected ')' but not found.".to_string())?
+        }
+
+        Ok(expression)
+    }
+
+    fn parse_if_expression(&mut self) -> Result<Expression, ParseError> {
+        self.expect_next(TokenKind::Lparen)?; // (
+
+        self.next_token();
+        let condition = self.parse_expression(Priority::Lowest as u8)?;
+
+        self.expect_next(TokenKind::Rparen)?; // )
+        self.expect_next(TokenKind::Lcurly)?; // {
+
+        let consequence = Box::new(self.parse_block_statement()?);
+
+        let alternative = if self.peek_token_is(TokenKind::Else) {
+            self.next_token();
+            self.expect_next(TokenKind::Lcurly)?;
+            Some(Box::new(self.parse_block_statement()?))
+        } else {
+            None
+        };
+
+        Ok(Expression::IfExpression {
+            condition: Box::new(condition),
+            consequence,
+            alternative,
+        })
+    }
 }
 
 mod tests {
@@ -202,8 +271,15 @@ mod tests {
     #[test]
     fn next_token() {
         let src = r#"
-        a + b * c;
-        a * b * c;
+        let a = 10;
+        if (true) {
+            let a = 10;
+        };
+        if (true) {
+            let a = 10;
+        } else {
+            let b = 100;
+        }
         "#;
         let mut pa = Parser::new(Lexer::new(src));
         pa.parse_program();
@@ -217,7 +293,7 @@ struct ParseError {
 
 impl ParseError {
     fn throw<T>(message: String) -> Result<T, Self> {
-        Result::Err(ParseError {
+        Err(ParseError {
             message,
             uncheck: false,
         })

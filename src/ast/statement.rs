@@ -18,6 +18,10 @@ pub enum Statement {
         token: Token,
         expression: Expression,
     },
+    BlockStatement {
+        token: Token,
+        statements: Vec<Statement>,
+    },
 }
 
 impl fmt::Display for Statement {
@@ -25,11 +29,16 @@ impl fmt::Display for Statement {
         match self {
             Statement::LetStatement {
                 identfier, value, ..
-            } => write!(f, "Statement -> let {} = {}", identfier, value)?,
+            } => write!(f, "let {} = {}", identfier, value)?,
             Statement::ReturnStatement { return_value, .. } => {
-                write!(f, "Statement -> return {}", return_value)?
+                write!(f, "return {}", return_value)?
             }
-            Statement::ExpressionStatement { expression, .. } => write!(f, "({})", expression)?,
+            Statement::ExpressionStatement { expression, .. } => write!(f, "{}", expression)?,
+            Statement::BlockStatement { statements, .. } => {
+                for stmt in statements {
+                    write!(f, "{{{}}}", stmt)?
+                }
+            }
         };
         Ok(())
     }

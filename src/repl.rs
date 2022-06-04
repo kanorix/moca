@@ -1,6 +1,6 @@
 use std::io::{stdin, stdout, Result, Write};
 
-use moca::lexer::Lexer;
+use moca::{lexer::Lexer, parser::Parser};
 
 pub fn start() {
     println!(":: start repl ::");
@@ -8,7 +8,7 @@ pub fn start() {
     loop {
         match input().as_deref() {
             Ok("exit") => break,
-            Ok(line) => eval(line),
+            Ok(line) => repl(line),
             Err(err) => {
                 println!("Error: {}", err);
                 break;
@@ -18,12 +18,11 @@ pub fn start() {
     println!(":: end repl ::");
 }
 
-fn eval(line: &str) {
-    let mut lexer = Lexer::new(line);
+fn repl(line: &str) {
+    let lexer = Lexer::new(line);
+    let mut parser = Parser::new(lexer);
 
-    while let Some(token) = lexer.next_token() {
-        println!("{}", token.to_string());
-    }
+    parser.parse_program();
 }
 
 fn input() -> Result<String> {
