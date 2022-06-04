@@ -13,6 +13,7 @@ pub enum TokenKind {
     GreaterThan, // >
     And,         // &&
     Or,          // ||
+    Comma,       // ,
     // Dot,      // .
 
     // separator (区切り子)
@@ -32,6 +33,7 @@ pub enum TokenKind {
     Else,    // else
     While,   // while
     Let,     // let
+    Fn,      // fn
     Int,     // int
     Double,  // double
     Boolean, // boolean
@@ -66,6 +68,7 @@ pub fn get_priority(token_kind: TokenKind) -> Priority {
         TokenKind::LessThan | TokenKind::GreaterThan => Priority::LessGreater,
         TokenKind::Plus | TokenKind::Minus => Priority::Sum,
         TokenKind::Asterisk | TokenKind::Slash => Priority::Product,
+        TokenKind::Lparen => Priority::Call,
         _ => Priority::Lowest,
     }
 }

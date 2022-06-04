@@ -4,30 +4,35 @@ use crate::ast::statement::Statement;
 use crate::token::Token;
 
 #[derive(Debug)]
+// Expression（式）は値を生成する
 pub enum Expression {
     Identifier(String),
     IntegerLiteral(i32),
     BooleanLiteral(bool),
-    // <operator> <rignt>
+    FunctionLiteral {
+        parameters: Vec<Box<Expression>>, // Identifier
+        body: Box<Statement>,             // BlockStatement
+    },
     PrefixExpression {
         token: Token,
         operator: String,
         right: Box<Expression>,
     },
-    // <left> <operator> <right>
     InfixExpression {
         token: Token,
         left: Box<Expression>,
         operator: String,
         right: Box<Expression>,
     },
-    // if (<condition>) <consequence> else <alternative>
     IfExpression {
         condition: Box<Expression>,
         consequence: Box<Statement>,
         alternative: Option<Box<Statement>>,
     },
-    Null,
+    CallExpression {
+        function: Box<Expression>, // Identifier or FunctionLiteral
+        arguments: Vec<Box<Expression>>,
+    },
 }
 
 impl fmt::Display for Expression {
@@ -36,6 +41,18 @@ impl fmt::Display for Expression {
             Expression::Identifier(s) => write!(f, "{}", s)?,
             Expression::IntegerLiteral(i) => write!(f, "{}", i)?,
             Expression::BooleanLiteral(b) => write!(f, "{}", b)?,
+            Expression::FunctionLiteral { parameters, body } => {
+                write!(
+                    f,
+                    "fn ({}) {}",
+                    parameters
+                        .iter()
+                        .map(|p| format!("{}", p))
+                        .collect::<Vec<String>>()
+                        .join(", "),
+                    body
+                )?;
+            }
             Expression::PrefixExpression {
                 operator, right, ..
             } => write!(f, "({}{})", operator, right)?,
@@ -58,7 +75,21 @@ impl fmt::Display for Expression {
                 )?,
                 _ => write!(f, "if ({}) \n\t{} ", condition, consequence)?,
             },
-            Expression::Null => write!(f, "null")?,
+            Expression::CallExpression {
+                function,
+                arguments,
+            } => {
+                write!(
+                    f,
+                    "{}({})",
+                    function,
+                    arguments
+                        .iter()
+                        .map(|p| format!("{}", p))
+                        .collect::<Vec<String>>()
+                        .join(", "),
+                )?;
+            }
         };
         Ok(())
     }

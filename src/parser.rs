@@ -108,7 +108,7 @@ impl Parser {
             self.next_token();
         }
 
-        Result::Ok(Statement::ReturnStatement {
+        Ok(Statement::ReturnStatement {
             token,
             return_value,
         })
@@ -146,7 +146,8 @@ impl Parser {
             TokenKind::Bang | TokenKind::Minus => self.parse_prefix_expression()?,
             TokenKind::Lparen => self.parse_grouped_expression()?,
             TokenKind::If => self.parse_if_expression()?,
-            _ => ParseError::throw("no prefix".to_string())?,
+            TokenKind::Fn => self.parse_function_literal()?,
+            other => ParseError::throw(format!("no prefix but found {:?}", other))?,
         };
 
         while !self.peek_token_is(TokenKind::SemiColon) && priority < self.peek_priority() as u8 {
@@ -161,6 +162,7 @@ impl Parser {
                 | TokenKind::NotEqual
                 | TokenKind::LessThan
                 | TokenKind::GreaterThan => Self::parse_infix_expression,
+                TokenKind::Lparen => Self::parse_call_expression,
                 _ => break,
             };
             self.next_token();
@@ -196,6 +198,38 @@ impl Parser {
                 ParseError::throw(format!("could not parse {} as boolean.", self.token.value))
             }
         }
+    }
+
+    fn parse_function_literal(&mut self) -> Result<Expression, ParseError> {
+        self.expect_next(TokenKind::Lparen)?; // (
+
+        let parameters = self.parse_function_params()?;
+
+        self.expect_next(TokenKind::Lcurly)?; // {
+
+        let body = Box::new(self.parse_block_statement()?);
+
+        Ok(Expression::FunctionLiteral { parameters, body })
+    }
+
+    fn parse_function_params(&mut self) -> Result<Vec<Box<Expression>>, ParseError> {
+        let mut params = Vec::new();
+
+        self.next_token();
+        if self.token.is_same_kind(TokenKind::Rparen) {
+            return Ok(params);
+        }
+
+        params.push(Box::new(Expression::Identifier(self.token.clone().value)));
+
+        while self.peek_token_is(TokenKind::Comma) {
+            self.next_token();
+            self.next_token();
+            params.push(Box::new(Expression::Identifier(self.token.clone().value)));
+        }
+
+        self.expect_next(TokenKind::Rparen)?; // )
+        Ok(params)
     }
 
     fn parse_prefix_expression(&mut self) -> Result<Expression, ParseError> {
@@ -262,6 +296,33 @@ impl Parser {
             alternative,
         })
     }
+
+    fn parse_call_expression(&mut self, function: Expression) -> Result<Expression, ParseError> {
+        Ok(Expression::CallExpression {
+            function: Box::new(function),
+            arguments: self.parse_call_arguments()?,
+        })
+    }
+
+    fn parse_call_arguments(&mut self) -> Result<Vec<Box<Expression>>, ParseError> {
+        let mut arguments = Vec::new();
+
+        self.next_token();
+        if self.token.is_same_kind(TokenKind::Rparen) {
+            return Ok(arguments);
+        }
+
+        arguments.push(Box::new(self.parse_expression(Priority::Lowest as u8)?));
+
+        while self.peek_token_is(TokenKind::Comma) {
+            self.next_token();
+            self.next_token();
+            arguments.push(Box::new(self.parse_expression(Priority::Lowest as u8)?));
+        }
+
+        self.expect_next(TokenKind::Rparen)?; // )
+        Ok(arguments)
+    }
 }
 
 mod tests {
@@ -272,14 +333,28 @@ mod tests {
     fn next_token() {
         let src = r#"
         let a = 10;
+        let b;
         if (true) {
             let a = 10;
         };
         if (true) {
-            let a = 10;
+            let a = 10; a + 10;
         } else {
             let b = 100;
         }
+        "#;
+        let src = r#"
+        let add = fn (a,b) {
+            return a + b;
+        }
+        "#;
+        let src = r#"
+        let add = fn () {
+            return a + b;
+        }
+        "#;
+        let src = r#"
+        add(a, b);
         "#;
         let mut pa = Parser::new(Lexer::new(src));
         pa.parse_program();

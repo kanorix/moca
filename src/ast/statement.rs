@@ -29,15 +29,17 @@ impl fmt::Display for Statement {
         match self {
             Statement::LetStatement {
                 identfier, value, ..
-            } => write!(f, "let {} = {}", identfier, value)?,
+            } => write!(f, "let {} = {};", identfier, value)?,
             Statement::ReturnStatement { return_value, .. } => {
-                write!(f, "return {}", return_value)?
+                write!(f, "return {};", return_value)?
             }
             Statement::ExpressionStatement { expression, .. } => write!(f, "{}", expression)?,
             Statement::BlockStatement { statements, .. } => {
+                write!(f, "{{\n")?;
                 for stmt in statements {
-                    write!(f, "{{{}}}", stmt)?
+                    write!(f, "{}", stmt)?;
                 }
+                write!(f, "\n}}")?;
             }
         };
         Ok(())

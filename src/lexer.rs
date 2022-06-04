@@ -67,7 +67,8 @@ impl Lexer {
 
     fn is_symbol(c: char) -> bool {
         vec![
-            '=', '+', '-', '*', '/', '!', '&', '|', ';', '(', ')', '{', '}', '[', ']', ':',
+            '=', '+', '-', '*', '/', '!', '&', '|', ';', '(', ')', '{', '}', '[', ']', ':', ',',
+            '<', '>',
         ]
         .contains(&c)
     }
@@ -103,6 +104,7 @@ impl Lexer {
             ']' => TokenKind::Rsquare,
             ';' => TokenKind::SemiColon,
             ':' => TokenKind::Colon,
+            ',' => TokenKind::Comma,
             '>' => TokenKind::LessThan,
             '<' => TokenKind::GreaterThan,
             '=' => match self.peek_char() {
@@ -152,6 +154,7 @@ impl Lexer {
             "if" => Token::new(TokenKind::If, value),
             "else" => Token::new(TokenKind::Else, value),
             "let" => Token::new(TokenKind::Let, value),
+            "fn" => Token::new(TokenKind::Fn, value),
             "while" => Token::new(TokenKind::While, value),
             "true" => Token::new(TokenKind::BoolLiteral, value),
             "false" => Token::new(TokenKind::BoolLiteral, value),
